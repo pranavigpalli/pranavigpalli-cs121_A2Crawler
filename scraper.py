@@ -18,6 +18,8 @@ def extract_next_links(url, resp):
     return list()
 
 def is_valid(url):
+    # Make sure to return only URLs that are within the domains and paths mentioned above! (see is_valid function in scraper.py -- you need to change it)
+    # 
     # Decide whether to crawl this url or not. 
     # If you decide to crawl it, return True; otherwise return False.
     # There are already some conditions that return False.
