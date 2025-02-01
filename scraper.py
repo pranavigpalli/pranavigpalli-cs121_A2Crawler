@@ -1,5 +1,7 @@
 import re
 from urllib.parse import urlparse
+import BeautifulSoup
+import lxml
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
