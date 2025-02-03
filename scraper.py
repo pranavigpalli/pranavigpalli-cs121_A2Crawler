@@ -9,6 +9,10 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
+    if resp.status == 200:
+        pass
+    else:
+        return []
     # Implementation required.
     # url: the URL that was used to get the page
     # resp.url: the actual url of the page
