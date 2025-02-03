@@ -3,6 +3,9 @@ from urllib.parse import urlparse
 import BeautifulSoup
 import lxml
 
+blacklist = set()
+visited = set()
+
 def scraper(url, resp):
     links = []
     if resp.status == 200:
@@ -33,6 +36,11 @@ def is_valid(url):
     # If you decide to crawl it, return True; otherwise return False.
     # There are already some conditions that return False.
     try:
+        if url in visited:
+            return False
+        if url in blacklist:
+            return False
+            
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
