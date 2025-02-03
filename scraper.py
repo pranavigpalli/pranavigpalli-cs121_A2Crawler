@@ -11,7 +11,8 @@ def scraper(url, resp):
 
 def extract_next_links(url, resp):
     if resp.status == 200:
-        pass
+        soup = BeautifulSoup(resp.raw_response.content, "lxml")
+        # for a_tag in soup
     else:
         return []
     # Implementation required.
