@@ -37,10 +37,9 @@ def extract_next_links(url, resp):
             parsed_url = urlparse(url)
             base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
             for anchor in soup.find_all("a", href=True):
-                absolute_url = urljoin(base_url, anchor["href"])  # TODO: notify group
+                absolute_url = urljoin(base_url, anchor["href"])
                 cleaned_url = absolute_url.split("#")[0]
                 links.append(cleaned_url)
-                visited.add(cleaned_url)  # TODO: remove, discuss with group
         except Exception as e:
             print(f"ERROR ON {url}: {e}")
     return links
@@ -60,7 +59,6 @@ def is_valid(url):
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
-        # TODO: notify group, this makes it so that the word before ics.uci.edu is optional
         return re.match(r'^(\w*\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
             not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
@@ -74,4 +72,4 @@ def is_valid(url):
 
     except TypeError:
         print ("TypeError for ", parsed)
-        # TODO: is there a reason raise was removed from here?
+        # TODO: raise a specific error
