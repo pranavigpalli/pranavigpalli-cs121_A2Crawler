@@ -6,6 +6,7 @@ import lxml
 
 blacklist = set()
 visited = set()
+last_access = {}
 
 def scraper(url, resp):
     links = []
@@ -41,8 +42,6 @@ def extract_next_links(url, resp):
                 cleaned_url = absolute_url.split("#")[0]
                 if cleaned_url not in links:
                     links.append(cleaned_url)
-                else:
-                    pass
         except Exception as e:
             print(f"ERROR ON {url}: {e}")
     return links
@@ -58,10 +57,17 @@ def is_valid(url):
             return False
         if url in blacklist:
             return False
-            
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
+
+        now = time.time()
+        if hostname in last_access:
+            elapsed = now - last_access[hostname]
+            if elapsed < 1:
+                time.sleep(0.5 - elapsed)
+        last_access[hostname] = time.time()
+
         return re.match(r'^(\w*\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
             not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
