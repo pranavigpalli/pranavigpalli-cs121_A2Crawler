@@ -7,6 +7,7 @@ import lxml
 blacklist = set()
 visited = set()
 last_access = {}
+subdomains = {}
 
 def scraper(url, resp):
     links = []
@@ -36,6 +37,13 @@ def extract_next_links(url, resp):
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
             parsed_url = urlparse(url)
+
+            domain = parsed_url.netloc
+            if domain.endswith("ics.uci.edu"):
+                if domain not in subdomains:
+                    subdomains[domain] = set()
+                subdomains[domain].add(url)
+            
             base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
             for anchor in soup.find_all("a", href=True):
                 absolute_url = urljoin(base_url, anchor["href"])
