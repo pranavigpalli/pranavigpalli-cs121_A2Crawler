@@ -117,3 +117,19 @@ def is_valid(url):
     except TypeError:
         print ("TypeError for ", parsed)
         # TODO: raise a specific error
+
+def output_report():
+    unique_count = len(unique_pages)
+    print(f"Total unique pages: {unique_count}")
+
+    print(f"Longest page: {longest_page_url} with {longest_page_word_count} words")
+
+    common_words = word_counter.most_common(50)
+    print("50 Most common words (word, frequency):")
+    for word, freq in common_words:
+        print(f"{word}, {freq}")
+
+    print("Subdomains in ics.uci.edu:")
+    for subdomain in sorted(ics_subdomains.keys()):
+        count = len(ics_subdomains[subdomain])
+        print(f"{subdomain}, {count}")
