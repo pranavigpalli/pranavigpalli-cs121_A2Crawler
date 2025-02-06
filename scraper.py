@@ -26,26 +26,24 @@ def extract_next_links(url, resp):
     links = []
     if resp.status != 200:
         blacklist.add(url)
-        return links
     elif "text/html" not in resp.raw_response.headers.get("Content-Type", ""):
-        print(f"]{url} is not an HTML page")
-        return links
+        print(f"{url} is not an HTML page")
     elif len(resp.raw_response.content) == 0:
         blacklist.add(url)
-        return links
     else:
         visited.add(url)
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
+            parsed_url = urlparse(url)
+            base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
             for anchor in soup.find_all("a", href=True):
-                absolute_url = urljoin(url, anchor["href"])
+                absolute_url = urljoin(base_url, anchor["href"])  # TODO: notify group
                 cleaned_url = absolute_url.split("#")[0]
                 links.append(cleaned_url)
-                visited.add(cleaned_url)
-            return links
+                visited.add(cleaned_url)  # TODO: remove, discuss with group
         except Exception as e:
-            print(f"ERROR ON {url}: {e}") 
-            return links
+            print(f"ERROR ON {url}: {e}")
+    return links
 
 def is_valid(url):
     # Make sure to return only URLs that are within the domains and paths mentioned above! (see is_valid function in scraper.py -- you need to change it)
@@ -60,12 +58,11 @@ def is_valid(url):
             return False
             
         parsed = urlparse(url)
-        if parsed.scheme not in ["http", "https"]:
+        if parsed.scheme not in set(["http", "https"]):
             return False
-        if not re.match(
-            r'^(\w*.)(ics.uci.edu|cs.uci.edu|informatics.uci.edu|stat.uci.edu)$', parsed.netloc):
-            return False
-        return not re.match(
+        # TODO: notify group, this makes it so that the word before ics.uci.edu is optional
+        return re.match(r'^(\w*\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
+            not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
@@ -77,3 +74,4 @@ def is_valid(url):
 
     except TypeError:
         print ("TypeError for ", parsed)
+        # TODO: is there a reason raise was removed from here?
