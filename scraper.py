@@ -61,10 +61,12 @@ def is_valid(url):
         if parsed.scheme not in set(["http", "https"]):
             return False
 
+        hostname = parsed.netloc
+
         now = time.time()
         if hostname in last_access:
             elapsed = now - last_access[hostname]
-            if elapsed < 1:
+            if elapsed < 0.5:
                 time.sleep(0.5 - elapsed)
         last_access[hostname] = time.time()
 
