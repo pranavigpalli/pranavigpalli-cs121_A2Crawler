@@ -1,13 +1,26 @@
 import re
 import time
+import lxml
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
-import lxml
+from collections import Counter
 
 blacklist = set()
 visited = set()
 last_access = {}
+
+unique_pages = set() 
+longest_page_url = None
+longest_page_word_count = 0
 subdomains = {}
+word_counter = Counter()
+
+URL_MAXLEN = 250
+SEGMENTS_MAXLEN = 10
+QUERY_PARAMS_MAXLEN = 5
+
+with open("stop_words.txt") as f:
+    stop_words = set(f.read().split())
 
 def scraper(url, resp):
     links = []
@@ -16,16 +29,9 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
-    # Implementation required.
-    # url: the URL that was used to get the page
-    # resp.url: the actual url of the page
-    # resp.status: the status code returned by the server. 200 is OK, you got the page. Other numbers mean that there was some kind of problem.
-    # resp.error: when status is not 200, you can check the error here, if needed.
-    # resp.raw_response: this is where the page actually is. More specifically, the raw_response has two parts:
-    #         resp.raw_response.url: the url, again
-    #         resp.raw_response.content: the content of the page!
-    # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
+    global longest_page_url, longest_page_word_count, word_counter, unique_pages, subdomains
     links = []
+    
     if resp.status != 200:
         blacklist.add(url)
     elif "text/html" not in resp.raw_response.headers.get("Content-Type", ""):
@@ -33,33 +39,44 @@ def extract_next_links(url, resp):
     elif len(resp.raw_response.content) == 0:
         blacklist.add(url)
     else:
-        visited.add(url)
+        cleaned_url = url.split("#")[0]
+        visited.add(cleaned_url)
+        unique_pages.add(cleaned_url)
+
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
-            parsed_url = urlparse(url)
+            words = re.findall(r'\w+', soup.get_text(separator=' ').lower())
 
-            domain = parsed_url.netloc
-            if domain.endswith("ics.uci.edu"):
-                if domain not in subdomains:
-                    subdomains[domain] = set()
-                subdomains[domain].add(url)
-            
+            filtered_words = [w for w in words if w not in stop_words]
+
+            word_counter.update(filtered_words)
+
+            word_count = len(words)
+            if word_count > longest_page_word_count:
+                longest_page_word_count = word_count
+                longest_page_url = cleaned_url
+
+            parsed_cleaned = urlparse(cleaned_url)
+            hostname = parsed_cleaned.netloc.lower()
+
+            if hostname.endswith("ics.uci.edu"):
+                if hostname not in subdomains:
+                    subdomains[hostname] = set()
+                subdomains[hostname].add(cleaned_url)
+
+            parsed_url = urlparse(url)
             base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
             for anchor in soup.find_all("a", href=True):
                 absolute_url = urljoin(base_url, anchor["href"])
-                cleaned_url = absolute_url.split("#")[0]
-                if cleaned_url not in links:
-                    links.append(cleaned_url)
+                link = absolute_url.split("#")[0]
+                if link not in links:
+                    links.append(link)
         except Exception as e:
             print(f"ERROR ON {url}: {e}")
     return links
 
+
 def is_valid(url):
-    # Make sure to return only URLs that are within the domains and paths mentioned above! (see is_valid function in scraper.py -- you need to change it)
-    # 
-    # Decide whether to crawl this url or not. 
-    # If you decide to crawl it, return True; otherwise return False.
-    # There are already some conditions that return False.
     try:
         if url in visited:
             return False
@@ -67,6 +84,14 @@ def is_valid(url):
             return False
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
+            return False
+        if len(url) > URL_MAXLEN:
+            return False
+        path_segments = parsed.path.split('/')
+        if len(path_segments) > SEGMENTS_MAXLEN:
+            return False
+        query_params = parsed.query.split('&') if parsed.query else []
+        if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
 
         hostname = parsed.netloc
@@ -78,7 +103,7 @@ def is_valid(url):
                 time.sleep(0.5 - elapsed)
         last_access[hostname] = time.time()
 
-        return re.match(r'^(\w*\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
+        return re.match(r'^(.+\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
             not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
