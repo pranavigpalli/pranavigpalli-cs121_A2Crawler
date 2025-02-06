@@ -39,7 +39,10 @@ def extract_next_links(url, resp):
             for anchor in soup.find_all("a", href=True):
                 absolute_url = urljoin(base_url, anchor["href"])
                 cleaned_url = absolute_url.split("#")[0]
-                links.append(cleaned_url)
+                if cleaned_url not in links:
+                    links.append(cleaned_url)
+                else:
+                    pass
         except Exception as e:
             print(f"ERROR ON {url}: {e}")
     return links
