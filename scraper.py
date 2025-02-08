@@ -93,6 +93,13 @@ def is_valid(url):
         query_params = parsed.query.split('&') if parsed.query else []
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
+        # hardcode any links that have a date in them, any links from wordpress, 
+        # example: https://wiki.ics.uci.edu/doku.php/projects:maint-spring-2021?tab_details=edit&do=media&tab_files=upload&image=virtual_environments%3Ajupyterhub%3Avscode.jpg&ns=services%3Apurchases, status <200>, using cache ('styx.ics.uci.edu', 9002).
+        # idk how to filter dis bro
+        if re.search(r'wiki', parsed.netloc, re.IGNORECASE):
+            return False
+        if re.search(r'wordpress', parsed.netloc, re.IGNORECASE) or re.search(r'wordpress', parsed.path, re.IGNORECASE):
+            return False
 
         hostname = parsed.netloc
 
