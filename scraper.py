@@ -36,10 +36,15 @@ def extract_next_links(url, resp):
         blacklist.add(url)
     elif "text/html" not in resp.raw_response.headers.get("Content-Type", ""):
         print(f"{url} is not an HTML page")
+        blacklist.add(url)
     elif len(resp.raw_response.content) == 0:
         blacklist.add(url)
     else:
-        cleaned_url = url.split("#")[0]
+        if urlparse(url).hostname == "wiki.ics.uci.edu":
+            cleaned_url = url.split("?")[0]
+        else:
+            cleaned_url = url.split("#")[0]
+
         visited.add(cleaned_url)
         unique_pages.add(cleaned_url)
 
