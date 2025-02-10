@@ -120,8 +120,7 @@ def is_valid(url):
         if re.search(r'\b\d{4}-\d{2}-\d{2}\b', url):
             blacklist.add(url)
             return False
-        
-        # politeness code
+
         hostname = parsed.netloc
 
         now = time.time()
