@@ -8,6 +8,7 @@ from collections import Counter
 blacklist = set()
 visited = set()
 last_access = {}
+trap_check = {}
 
 unique_pages = set() 
 longest_page_url = None
@@ -15,7 +16,7 @@ longest_page_word_count = 0
 subdomains = {}
 word_counter = Counter()
 
-URL_MAXLEN = 250
+URL_MAXLEN = 225
 SEGMENTS_MAXLEN = 10
 QUERY_PARAMS_MAXLEN = 5
 
@@ -29,7 +30,9 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
-    global longest_page_url, longest_page_word_count, word_counter, unique_pages, subdomains
+    global blacklist, visited, last_access, trap_check
+    global unique_pages, longest_page_url, longest_page_word_count, subdomains, word_counter
+    
     links = []
     
     if resp.status != 200:
@@ -80,23 +83,45 @@ def extract_next_links(url, resp):
 
 
 def is_valid(url):
+    global blacklist, visited, last_access, trap_check
+    global unique_pages, longest_page_url, longest_page_word_count, subdomains, word_counter
+    global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
+
     try:
         if url in visited or urlparse(url).hostname in visited:
             return False
         if url in blacklist:
             return False
+        if len(url) > URL_MAXLEN:
+            return False
+
+        base_url = url.split("?")[0]
+        if (base_url in trap_check):
+            trap_check[base_url] += 1
+        else:
+            trap_check = dict()
+            trap_check[base_url] = 1
+
+        if trap_check[base_url] > 175:
+            return False
+
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
-        if len(url) > URL_MAXLEN:
-            return False
+
         path_segments = parsed.path.split('/')
         if len(path_segments) > SEGMENTS_MAXLEN:
             return False
+
         query_params = parsed.query.split('&') if parsed.query else []
+
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
-
+        if re.search(r'\b\d{4}-\d{2}-\d{2}\b', url):
+            blacklist.add(url)
+            return False
+        
+        # politeness code
         hostname = parsed.netloc
 
         now = time.time()
@@ -132,6 +157,6 @@ def output_report():
         print(f"{word}, {freq}")
 
     print("Subdomains in ics.uci.edu:")
-    for subdomain in sorted(ics_subdomains.keys()):
-        count = len(ics_subdomains[subdomain])
+    for subdomain in sorted(subdomains.keys()):
+        count = len(subdomains[subdomain])
         print(f"{subdomain}, {count}")
