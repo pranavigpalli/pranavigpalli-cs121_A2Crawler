@@ -35,16 +35,12 @@ def extract_next_links(url, resp):
     if resp.status != 200:
         blacklist.add(url)
     elif "text/html" not in resp.raw_response.headers.get("Content-Type", ""):
-        print(f"{url} is not an HTML page")
         blacklist.add(url)
     elif len(resp.raw_response.content) == 0:
         blacklist.add(url)
     else:
-        if urlparse(url).hostname == "wiki.ics.uci.edu":
-            cleaned_url = url.split("?")[0]
-        else:
-            cleaned_url = url.split("#")[0]
-
+        # cleaned_url is the url with the fragment cut off (so scheme to query)
+        cleaned_url = url.split("#")[0]
         visited.add(cleaned_url)
         unique_pages.add(cleaned_url)
 
@@ -55,35 +51,37 @@ def extract_next_links(url, resp):
             filtered_words = [w for w in words if w not in stop_words]
 
             word_counter.update(filtered_words)
-
             word_count = len(words)
             if word_count > longest_page_word_count:
                 longest_page_word_count = word_count
                 longest_page_url = cleaned_url
 
+            # parsed_cleaned is a Parse Object from scheme to query
             parsed_cleaned = urlparse(cleaned_url)
             hostname = parsed_cleaned.netloc.lower()
 
-            if hostname.endswith("ics.uci.edu"):
+            if hostname.endswith("ics.uci.edu") or hostname.endswith("cs.uci.edu") or hostname.endswith("informatics.uci.edu") or hostname.endswith("stat.uci.edu"):
                 if hostname not in subdomains:
                     subdomains[hostname] = set()
                 subdomains[hostname].add(cleaned_url)
 
-            parsed_url = urlparse(url)
-            base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+            base_url = f"{parsed_cleaned.scheme}://{parsed_cleaned.netloc}"
+
             for anchor in soup.find_all("a", href=True):
                 absolute_url = urljoin(base_url, anchor["href"])
                 link = absolute_url.split("#")[0]
                 if link not in links:
                     links.append(link)
+        
         except Exception as e:
             print(f"ERROR ON {url}: {e}")
+        
     return links
 
 
 def is_valid(url):
     try:
-        if url in visited:
+        if url in visited or urlparse(url).hostname in visited:
             return False
         if url in blacklist:
             return False
@@ -121,7 +119,6 @@ def is_valid(url):
 
     except TypeError:
         print ("TypeError for ", parsed)
-        # TODO: raise a specific error
 
 def output_report():
     unique_count = len(unique_pages)
