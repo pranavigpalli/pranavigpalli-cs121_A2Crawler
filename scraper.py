@@ -118,7 +118,8 @@ def is_valid(url):
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
         if re.search(r'\b\d{4}-\d{2}-\d{2}\b', url):
-            blacklist.add(url)
+            return False
+        if re.search(r'\b\d{4}-\d{2}\b', url):
             return False
 
         hostname = parsed.netloc
