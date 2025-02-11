@@ -1,7 +1,7 @@
 import re
 import time
 import lxml
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, parse_qs
 from bs4 import BeautifulSoup
 from collections import Counter
 
