@@ -10,7 +10,6 @@ visited = set()
 last_access = {}
 trap_check = {}
 
-unique_pages = set() 
 longest_page_url = None
 longest_page_word_count = 0
 subdomains = {}
@@ -31,7 +30,7 @@ def scraper(url, resp):
 
 def extract_next_links(url, resp):
     global blacklist, visited, last_access, trap_check
-    global unique_pages, longest_page_url, longest_page_word_count, subdomains, word_counter
+    global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
     
@@ -45,7 +44,6 @@ def extract_next_links(url, resp):
         # cleaned_url is the url with the fragment cut off (so scheme to query)
         cleaned_url = url.split("#")[0]
         visited.add(cleaned_url)
-        unique_pages.add(cleaned_url)
 
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
@@ -84,7 +82,7 @@ def extract_next_links(url, resp):
 
 def is_valid(url):
     global blacklist, visited, last_access, trap_check
-    global unique_pages, longest_page_url, longest_page_word_count, subdomains, word_counter
+    global longest_page_url, longest_page_word_count, subdomains, word_counter
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
 
     try:
@@ -153,8 +151,7 @@ def is_valid(url):
         print ("TypeError for ", parsed)
 
 def output_report():
-    unique_count = len(unique_pages)
-    print(f"Total unique pages: {unique_count}")
+    print(f"Total unique pages: {len(visited)}")
 
     print(f"Longest page: {longest_page_url} with {longest_page_word_count} words")
 
