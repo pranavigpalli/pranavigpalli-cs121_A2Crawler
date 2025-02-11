@@ -1,5 +1,4 @@
 import re
-import time
 import lxml
 from urllib.parse import urlparse, urljoin, parse_qs
 from bs4 import BeautifulSoup
@@ -7,7 +6,6 @@ from collections import Counter
 
 blacklist = set()
 visited = set()
-last_access = {}
 trap_check = {}
 
 longest_page_url = None
@@ -29,7 +27,7 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
-    global blacklist, visited, last_access, trap_check
+    global blacklist, visited, trap_check
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
@@ -81,7 +79,7 @@ def extract_next_links(url, resp):
 
 
 def is_valid(url):
-    global blacklist, visited, last_access, trap_check
+    global blacklist, visited, trap_check
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
 
@@ -118,15 +116,6 @@ def is_valid(url):
         if re.search(r'\b\d{4}-\d{2}-\d{2}\b', url):
             blacklist.add(url)
             return False
-
-        hostname = parsed.netloc
-
-        now = time.time()
-        if hostname in last_access:
-            elapsed = now - last_access[hostname]
-            if elapsed < 0.5:
-                time.sleep(0.5 - elapsed)
-        last_access[hostname] = time.time()
 
         # unwanted file extensions
         pattern = r".*\.(css|js|bmp|gif|jpe?g|ico"
