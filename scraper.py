@@ -14,6 +14,7 @@ longest_page_word_count = 0
 subdomains = {}
 word_counter = Counter()
 
+MAX_FILE_SIZE = 5 * 1024 * 1024 
 URL_MAXLEN = 225
 SEGMENTS_MAXLEN = 10
 QUERY_PARAMS_MAXLEN = 5
@@ -35,10 +36,15 @@ def extract_next_links(url, resp):
     
     if resp.status != 200:
         blacklist.add(url)
+        return []
     elif "text/html" not in resp.raw_response.headers.get("Content-Type", ""):
         blacklist.add(url)
+        return []
     elif len(resp.raw_response.content) == 0:
         blacklist.add(url)
+        return []
+    elif len(resp.raw_response.content) > MAX_FILE_SIZE:
+        return False
     else:
         # cleaned_url is the url with the fragment cut off (so scheme to query)
         cleaned_url = url.split("#")[0]
@@ -47,6 +53,13 @@ def extract_next_links(url, resp):
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
             words = re.findall(r'\w+', soup.get_text(separator=' ').lower())
+
+            if (len(words) / max(len(resp.raw_response.content), 1)) < 0.15:
+                blacklist.add(url)
+                return []
+            if len(words) < 10:  # If there are very few words, it's likely a dead page
+                blacklist.add(url)
+                return []
 
             filtered_words = [w for w in words if w not in stop_words]
 
@@ -118,7 +131,7 @@ def is_valid(url):
 
         if re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
             return False
-        if re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url):  # Match YYYY-MM or YYYY-MM-DD
+        if re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url):
             return False
         if re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE):
             return False
@@ -130,7 +143,10 @@ def is_valid(url):
             return False
         if re.search(r'/page/\d+', url):
             return False
-
+        if re.search(r'[\?&]version=\d+', url) or re.search(r'[\?&]action=diff&version=\d+', url) or re.search(r'[\?&]format=txt', url):
+            return False
+        if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE):
+            return False
 
 
         return re.match(r'^(.+\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
@@ -142,7 +158,7 @@ def is_valid(url):
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|bam)$", parsed.path.lower())
 
     except TypeError:
         print ("TypeError for ", parsed)
