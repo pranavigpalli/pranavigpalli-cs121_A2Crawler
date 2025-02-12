@@ -1,7 +1,6 @@
 import re
-import time
 import lxml
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, parse_qs
 from bs4 import BeautifulSoup
 from collections import Counter
 
@@ -10,7 +9,6 @@ visited = set()
 last_access = {}
 trap_check = {}
 
-unique_pages = set() 
 longest_page_url = None
 longest_page_word_count = 0
 subdomains = {}
@@ -31,7 +29,7 @@ def scraper(url, resp):
 
 def extract_next_links(url, resp):
     global blacklist, visited, last_access, trap_check
-    global unique_pages, longest_page_url, longest_page_word_count, subdomains, word_counter
+    global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
     
@@ -45,7 +43,6 @@ def extract_next_links(url, resp):
         # cleaned_url is the url with the fragment cut off (so scheme to query)
         cleaned_url = url.split("#")[0]
         visited.add(cleaned_url)
-        unique_pages.add(cleaned_url)
 
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
@@ -84,11 +81,11 @@ def extract_next_links(url, resp):
 
 def is_valid(url):
     global blacklist, visited, last_access, trap_check
-    global unique_pages, longest_page_url, longest_page_word_count, subdomains, word_counter
+    global longest_page_url, longest_page_word_count, subdomains, word_counter
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
 
     try:
-        if url in visited or urlparse(url).hostname in visited:
+        if url in visited:
             return False
         if url in blacklist:
             return False
@@ -96,17 +93,18 @@ def is_valid(url):
             return False
 
         base_url = url.split("?")[0]
-        if (base_url in trap_check):
-            trap_check[base_url] += 1
-        else:
-            trap_check = dict()
-            trap_check[base_url] = 1
-
+        trap_check[base_url] = trap_check.get(base_url, 0) + 1
         if trap_check[base_url] > 175:
             return False
 
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
+            return False
+        if parsed.hostname in visited:
+            return False
+        
+        trap_check[str(parsed.netloc)] = trap_check.get(str(parsed.netloc), 0) + 1
+        if trap_check[base_url] > 500:
             return False
 
         path_segments = parsed.path.split('/')
@@ -117,19 +115,23 @@ def is_valid(url):
 
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
-        if re.search(r'\b\d{4}-\d{2}-\d{2}\b', url):
+
+        if re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
             return False
-        if re.search(r'\b\d{4}-\d{2}\b', url):
+        if re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url):  # Match YYYY-MM or YYYY-MM-DD
+            return False
+        if re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE):
+            return False
+        if re.search(r'gitlab\.ics\.uci\.edu.*(/-/|/users/|/blob/|/commits/|/tree/|/compare|/explore/|\.git$|/[^/]+/[^/]+)', url):
+            return False
+        if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url):
+            return False
+        if re.search(r'wp-login\.php\?redirect_to=[^&]+', url):
+            return False
+        if re.search(r'/page/\d+', url):
             return False
 
-        hostname = parsed.netloc
 
-        now = time.time()
-        if hostname in last_access:
-            elapsed = now - last_access[hostname]
-            if elapsed < 0.5:
-                time.sleep(0.5 - elapsed)
-        last_access[hostname] = time.time()
 
         return re.match(r'^(.+\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
             not re.match(
@@ -146,7 +148,7 @@ def is_valid(url):
         print ("TypeError for ", parsed)
 
 def output_report():
-    unique_count = len(unique_pages)
+    unique_count = len(visited)
     print(f"Total unique pages: {unique_count}")
 
     print(f"Longest page: {longest_page_url} with {longest_page_word_count} words")
