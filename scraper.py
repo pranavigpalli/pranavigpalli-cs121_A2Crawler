@@ -1,7 +1,7 @@
 import re
 import time
 import lxml
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, parse_qs
 from bs4 import BeautifulSoup
 from collections import Counter
 
@@ -10,7 +10,6 @@ visited = set()
 last_access = {}
 trap_check = {}
 
-unique_pages = set() 
 longest_page_url = None
 longest_page_word_count = 0
 subdomains = {}
@@ -31,7 +30,7 @@ def scraper(url, resp):
 
 def extract_next_links(url, resp):
     global blacklist, visited, last_access, trap_check
-    global unique_pages, longest_page_url, longest_page_word_count, subdomains, word_counter
+    global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
     
@@ -84,11 +83,11 @@ def extract_next_links(url, resp):
 
 def is_valid(url):
     global blacklist, visited, last_access, trap_check
-    global unique_pages, longest_page_url, longest_page_word_count, subdomains, word_counter
+    global longest_page_url, longest_page_word_count, subdomains, word_counter
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
 
     try:
-        if url in visited or urlparse(url).hostname in visited:
+        if url in visited:
             return False
         if url in blacklist:
             return False
@@ -96,11 +95,9 @@ def is_valid(url):
             return False
 
         base_url = url.split("?")[0]
-        if (base_url in trap_check):
-            trap_check[base_url] += 1
-        else:
-            trap_check = dict()
-            trap_check[base_url] = 1
+        trap_check[base_url] = trap_check.get(base_url, 0) + 1
+        if trap_check[base_url] > 175:
+            return False
 
         if trap_check[base_url] > 175:
             return False
@@ -117,8 +114,14 @@ def is_valid(url):
 
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
-        if re.search(r'\b\d{4}-\d{2}-\d{2}\b', url):
-            blacklist.add(url)
+
+        if re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
+            return False
+        if re.search(r'[?&](date|year|month|day|view|do|tab_files)=[^&]*', url, re.IGNORECASE):
+            return False
+        if re.search(r'gitlab\.ics\.uci\.edu.*(/-/|/users/|/blob/|/commits/|/tree/|/compare|/explore/|\.git$|/[^/]+/[^/]+)', url):
+            return False
+        if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url):
             return False
 
         hostname = parsed.netloc
@@ -132,13 +135,13 @@ def is_valid(url):
 
         # unwanted file extensions
         pattern = r".*\.(css|js|bmp|gif|jpe?g|ico"
-            + r"|png|tiff?|mid|mp2|mp3|mp4"
-            + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
-            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
-            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
-            + r"|epub|dll|cnf|tgz|sha1"
-            + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$"
+        + r"|png|tiff?|mid|mp2|mp3|mp4"
+        + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
+        + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
+        + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
+        + r"|epub|dll|cnf|tgz|sha1"
+        + r"|thmx|mso|arff|rtf|jar|csv"
+        + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$" 
         # check that queries do not have unwanted file extensions
         queries = parse_qs(parsed.query)
         for values in queries.values():
