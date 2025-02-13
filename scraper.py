@@ -36,15 +36,12 @@ def extract_next_links(url, resp):
     
     if resp.status != 200:
         blacklist.add(url)
-        return []
     elif "text/html" not in resp.raw_response.headers.get("Content-Type", ""):
         blacklist.add(url)
-        return []
     elif len(resp.raw_response.content) == 0:
         blacklist.add(url)
-        return []
     elif len(resp.raw_response.content) > MAX_FILE_SIZE:
-        return False
+        blacklist.add(url)
     else:
         # cleaned_url is the url with the fragment cut off (so scheme to query)
         cleaned_url = url.split("#")[0]
@@ -54,10 +51,10 @@ def extract_next_links(url, resp):
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
             words = re.findall(r'\w+', soup.get_text(separator=' ').lower())
 
-            if (len(words) / max(len(resp.raw_response.content), 1)) < 0.15:
-                blacklist.add(url)
-                return []
-            if len(words) < 10:  # If there are very few words, it's likely a dead page
+            # if (len(words) / max(len(resp.raw_response.content), 1)) < 0.15:
+            #     blacklist.add(url)
+            #     return []
+            if len(words) < 20:  # If there are very few words, it's likely a dead page
                 blacklist.add(url)
                 return []
 
@@ -148,33 +145,43 @@ def is_valid(url):
         if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE):
             return False
 
+        pattern = (
+            r".*\.(css|js|bmp|gif|jpe?g|ico"
+            r"|png|tiff?|mid|mp2|mp3|mp4"
+            r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
+            r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
+            r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
+            r"|epub|dll|cnf|tgz|sha1"
+            r"|thmx|mso|arff|rtf|jar|csv"
+            r"|rm|smil|wmv|swf|wma|zip|rar|gz|bam)$"
+        )
+        # check that queries do not have unwanted file extensions
+        queries = parse_qs(parsed.query)
+        for values in queries.values():
+            for value in values:
+                if re.match(pattern, value.lower()):
+                    return False
 
         return re.match(r'^(.+\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
-            not re.match(
-            r".*\.(css|js|bmp|gif|jpe?g|ico"
-            + r"|png|tiff?|mid|mp2|mp3|mp4"
-            + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
-            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
-            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
-            + r"|epub|dll|cnf|tgz|sha1"
-            + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|bam)$", parsed.path.lower())
+            not re.match(pattern, parsed.path.lower())
 
     except TypeError:
         print ("TypeError for ", parsed)
 
 def output_report():
-    unique_count = len(visited)
-    print(f"Total unique pages: {unique_count}")
+    with open("report.txt", "w", encoding="utf-8") as file:
+        unique_count = len(visited)
+        file.write(f"Total unique pages: {unique_count}\n\n")
 
-    print(f"Longest page: {longest_page_url} with {longest_page_word_count} words")
+        file.write(f"Longest page: {longest_page_url} with {longest_page_word_count} words\n\n")
 
-    common_words = word_counter.most_common(50)
-    print("50 Most common words (word, frequency):")
-    for word, freq in common_words:
-        print(f"{word}, {freq}")
+        common_words = word_counter.most_common(50)
+        file.write("50 Most common words (word, frequency):\n")
+        for word, freq in common_words:
+            file.write(f"{word}, {freq}\n")
+        file.write("\n")
 
-    print("Subdomains in ics.uci.edu:")
-    for subdomain in sorted(subdomains.keys()):
-        count = len(subdomains[subdomain])
-        print(f"{subdomain}, {count}")
+        file.write("Subdomains in ics.uci.edu:\n")
+        for subdomain in sorted(subdomains.keys()):
+            count = len(subdomains[subdomain])
+            file.write(f"{subdomain}, {count}\n")
