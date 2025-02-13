@@ -6,7 +6,6 @@ from collections import Counter
 
 blacklist = set()
 visited = set()
-last_access = {}
 trap_check = {}
 
 longest_page_url = None
@@ -29,7 +28,7 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
-    global blacklist, visited, last_access, trap_check
+    global blacklist, visited, trap_check
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
@@ -90,7 +89,7 @@ def extract_next_links(url, resp):
 
 
 def is_valid(url):
-    global blacklist, visited, last_access, trap_check
+    global blacklist, visited, trap_check
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
 
@@ -145,6 +144,8 @@ def is_valid(url):
         if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE):
             return False
 
+
+        # unwanted file extensions
         pattern = (
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             r"|png|tiff?|mid|mp2|mp3|mp4"
@@ -153,8 +154,8 @@ def is_valid(url):
             r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             r"|epub|dll|cnf|tgz|sha1"
             r"|thmx|mso|arff|rtf|jar|csv"
-            r"|rm|smil|wmv|swf|wma|zip|rar|gz|bam)$"
-        )
+            r"|rm|smil|wmv|swf|wma|zip|rar|gz|bam)$")
+        
         # check that queries do not have unwanted file extensions
         queries = parse_qs(parsed.query)
         for values in queries.values():
