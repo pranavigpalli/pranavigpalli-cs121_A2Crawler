@@ -13,6 +13,7 @@ longest_page_word_count = 0
 subdomains = {}
 word_counter = Counter()
 
+MAX_FILE_SIZE = 5 * 1024 * 1024 
 URL_MAXLEN = 225
 SEGMENTS_MAXLEN = 10
 QUERY_PARAMS_MAXLEN = 5
@@ -38,6 +39,8 @@ def extract_next_links(url, resp):
         blacklist.add(url)
     elif len(resp.raw_response.content) == 0:
         blacklist.add(url)
+    elif len(resp.raw_response.content) > MAX_FILE_SIZE:
+        blacklist.add(url)
     else:
         # cleaned_url is the url with the fragment cut off (so scheme to query)
         cleaned_url = url.split("#")[0]
@@ -46,6 +49,13 @@ def extract_next_links(url, resp):
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
             words = re.findall(r'\w+', soup.get_text(separator=' ').lower())
+
+            # if (len(words) / max(len(resp.raw_response.content), 1)) < 0.15:
+            #     blacklist.add(url)
+            #     return []
+            if len(words) < 20:  # If there are very few words, it's likely a dead page
+                blacklist.add(url)
+                return []
 
             filtered_words = [w for w in words if w not in stop_words]
 
@@ -84,7 +94,7 @@ def is_valid(url):
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
 
     try:
-        if url in visited or urlparse(url).hostname in visited:
+        if url in visited:
             return False
         if url in blacklist:
             return False
@@ -92,17 +102,18 @@ def is_valid(url):
             return False
 
         base_url = url.split("?")[0]
-        if (base_url in trap_check):
-            trap_check[base_url] += 1
-        else:
-            trap_check = dict()
-            trap_check[base_url] = 1
-
+        trap_check[base_url] = trap_check.get(base_url, 0) + 1
         if trap_check[base_url] > 175:
             return False
 
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
+            return False
+        if parsed.hostname in visited:
+            return False
+        
+        trap_check[str(parsed.netloc)] = trap_check.get(str(parsed.netloc), 0) + 1
+        if trap_check[base_url] > 500:
             return False
 
         path_segments = parsed.path.split('/')
@@ -113,9 +124,26 @@ def is_valid(url):
 
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
-        if re.search(r'\b\d{4}-\d{2}-\d{2}\b', url):
-            blacklist.add(url)
+
+        if re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
             return False
+        if re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url):
+            return False
+        if re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE):
+            return False
+        if re.search(r'gitlab\.ics\.uci\.edu.*(/-/|/users/|/blob/|/commits/|/tree/|/compare|/explore/|\.git$|/[^/]+/[^/]+)', url):
+            return False
+        if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url):
+            return False
+        if re.search(r'wp-login\.php\?redirect_to=[^&]+', url):
+            return False
+        if re.search(r'/page/\d+', url):
+            return False
+        if re.search(r'[\?&]version=\d+', url) or re.search(r'[\?&]action=diff&version=\d+', url) or re.search(r'[\?&]format=txt', url):
+            return False
+        if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE):
+            return False
+
 
         # unwanted file extensions
         pattern = (
@@ -126,8 +154,8 @@ def is_valid(url):
             r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             r"|epub|dll|cnf|tgz|sha1"
             r"|thmx|mso|arff|rtf|jar|csv"
-            r"|rm|smil|wmv|swf|wma|zip|rar|gz)$"
-        )
+            r"|rm|smil|wmv|swf|wma|zip|rar|gz|bam)$")
+        
         # check that queries do not have unwanted file extensions
         queries = parse_qs(parsed.query)
         for values in queries.values():
@@ -142,16 +170,19 @@ def is_valid(url):
         print ("TypeError for ", parsed)
 
 def output_report():
-    print(f"Total unique pages: {len(visited)}")
+    with open("report.txt", "w", encoding="utf-8") as file:
+        unique_count = len(visited)
+        file.write(f"Total unique pages: {unique_count}\n\n")
 
-    print(f"Longest page: {longest_page_url} with {longest_page_word_count} words")
+        file.write(f"Longest page: {longest_page_url} with {longest_page_word_count} words\n\n")
 
-    common_words = word_counter.most_common(50)
-    print("50 Most common words (word, frequency):")
-    for word, freq in common_words:
-        print(f"{word}, {freq}")
+        common_words = word_counter.most_common(50)
+        file.write("50 Most common words (word, frequency):\n")
+        for word, freq in common_words:
+            file.write(f"{word}, {freq}\n")
+        file.write("\n")
 
-    print("Subdomains in ics.uci.edu:")
-    for subdomain in sorted(subdomains.keys()):
-        count = len(subdomains[subdomain])
-        print(f"{subdomain}, {count}")
+        file.write("Subdomains in ics.uci.edu:\n")
+        for subdomain in sorted(subdomains.keys()):
+            count = len(subdomains[subdomain])
+            file.write(f"{subdomain}, {count}\n")
