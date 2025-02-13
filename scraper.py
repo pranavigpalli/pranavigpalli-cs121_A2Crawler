@@ -29,7 +29,7 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
-    global blacklist, visited, trap_check
+    global blacklist, visited
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
@@ -86,46 +86,40 @@ def extract_next_links(url, resp):
 
 def is_valid(url):
     global blacklist, visited, trap_check
-    global longest_page_url, longest_page_word_count, subdomains, word_counter
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
 
     try:
-        if url in visited:
-            return False
-        if url in blacklist:
-            return False
-        if len(url) > URL_MAXLEN:
-            return False
-
-        base_url = url.split("?")[0]
-        trap_check[base_url] = trap_check.get(base_url, 0) + 1
-        if trap_check[base_url] > 175:
-            return False
-
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
-        if parsed.hostname in visited:
+        
+        if (url in visited) or (url in blacklist):
             return False
         
-        trap_check[str(parsed.netloc)] = trap_check.get(str(parsed.netloc), 0) + 1
-        if trap_check[base_url] > 500:
+        if len(url) > URL_MAXLEN:
             return False
-
+        
         path_segments = parsed.path.split('/')
         if len(path_segments) > SEGMENTS_MAXLEN:
             return False
-
-        query_params = parsed.query.split('&') if parsed.query else []
-
+        
+        query_params = parsed.query.split('&')
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
 
-        if re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
+        base_url = url.split("?")[0]  # without query or fragment
+        trap_check[base_url] = trap_check.get(base_url, 0) + 1
+        if trap_check[base_url] > 175:
             return False
-        if re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url):
+        
+        subdomain = parsed.netloc
+        trap_check[subdomain] = trap_check.get(subdomain, 0) + 1
+        if trap_check[subdomain] > 500:
             return False
-        if re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE):
+
+        if (re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url) or 
+            re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url) or 
+            re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE)):
             return False
         if re.search(r'gitlab\.ics\.uci\.edu.*(/-/|/users/|/blob/|/commits/|/tree/|/compare|/explore/|\.git$|/[^/]+/[^/]+)', url):
             return False
@@ -139,7 +133,6 @@ def is_valid(url):
             return False
         if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE):
             return False
-
 
         # unwanted file extensions
         pattern = (
@@ -164,6 +157,7 @@ def is_valid(url):
 
     except TypeError:
         print ("TypeError for ", parsed)
+        raise
 
 def output_report():
     with open("report.txt", "w", encoding="utf-8") as file:
