@@ -13,7 +13,8 @@ longest_page_word_count = 0
 subdomains = {}
 word_counter = Counter()
 
-MAX_FILE_SIZE = 5 * 1024 * 1024 
+MIN_FILE_SIZE = 100              # 100 bytes (approx. 20 words)
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 URL_MAXLEN = 225
 SEGMENTS_MAXLEN = 10
 QUERY_PARAMS_MAXLEN = 5
@@ -32,32 +33,28 @@ def extract_next_links(url, resp):
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
+    cleaned_url = url.split("#")[0]  # the url without the fragment (i.e. scheme to query)
     
     if resp.status != 200:
-        blacklist.add(url)
-    elif "text/html" not in resp.raw_response.headers.get("Content-Type", ""):
-        blacklist.add(url)
-    elif len(resp.raw_response.content) == 0:
-        blacklist.add(url)
+        blacklist.add(cleaned_url)
+    elif resp.raw_response and ("text/html" not in resp.raw_response.headers.get("Content-Type", "")):
+        blacklist.add(cleaned_url)
+    elif len(resp.raw_response.content) < MIN_FILE_SIZE:
+        blacklist.add(cleaned_url)
     elif len(resp.raw_response.content) > MAX_FILE_SIZE:
-        blacklist.add(url)
+        blacklist.add(cleaned_url)
     else:
-        # cleaned_url is the url with the fragment cut off (so scheme to query)
-        cleaned_url = url.split("#")[0]
         visited.add(cleaned_url)
 
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
             words = re.findall(r'\w+', soup.get_text(separator=' ').lower())
 
-            # if (len(words) / max(len(resp.raw_response.content), 1)) < 0.15:
-            #     blacklist.add(url)
-            #     return []
-            if len(words) < 20:  # If there are very few words, it's likely a dead page
-                blacklist.add(url)
+            if len(words) < 20:
+                blacklist.add(cleaned_url)
                 return []
 
-            filtered_words = [w for w in words if w not in stop_words]
+            filtered_words = [word for word in words if word not in stop_words]
 
             word_counter.update(filtered_words)
             word_count = len(words)
@@ -65,7 +62,7 @@ def extract_next_links(url, resp):
                 longest_page_word_count = word_count
                 longest_page_url = cleaned_url
 
-            # parsed_cleaned is a Parse Object from scheme to query
+            # parsed_cleaned is a ParseResult object from scheme to query
             parsed_cleaned = urlparse(cleaned_url)
             hostname = parsed_cleaned.netloc.lower()
 
@@ -75,7 +72,6 @@ def extract_next_links(url, resp):
                 subdomains[hostname].add(cleaned_url)
 
             base_url = f"{parsed_cleaned.scheme}://{parsed_cleaned.netloc}"
-
             for anchor in soup.find_all("a", href=True):
                 absolute_url = urljoin(base_url, anchor["href"])
                 link = absolute_url.split("#")[0]
