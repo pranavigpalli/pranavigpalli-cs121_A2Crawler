@@ -6,7 +6,6 @@ from collections import Counter
 
 blacklist = set()
 visited = set()
-last_access = {}
 trap_check = {}
 
 longest_page_url = None
@@ -14,6 +13,7 @@ longest_page_word_count = 0
 subdomains = {}
 word_counter = Counter()
 
+MIN_FILE_SIZE = 100
 MAX_FILE_SIZE = 5 * 1024 * 1024 
 URL_MAXLEN = 225
 SEGMENTS_MAXLEN = 10
@@ -29,36 +29,31 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
-    global blacklist, visited, last_access, trap_check
+    global blacklist, visited
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
+    cleaned_url = url.split("#")[0]  # the url without the fragment (i.e. scheme to query)
     
     if resp.status != 200:
-        blacklist.add(url)
-    elif "text/html" not in resp.raw_response.headers.get("Content-Type", ""):
-        blacklist.add(url)
-    elif len(resp.raw_response.content) == 0:
-        blacklist.add(url)
+        blacklist.add(cleaned_url)
+    elif resp.raw_response and ("text/html" not in resp.raw_response.headers.get("Content-Type", "")):
+        blacklist.add(cleaned_url)
+    elif len(resp.raw_response.content) < MIN_FILE_SIZE:
+        blacklist.add(cleaned_url)
     elif len(resp.raw_response.content) > MAX_FILE_SIZE:
-        blacklist.add(url)
+        blacklist.add(cleaned_url)
     else:
-        # cleaned_url is the url with the fragment cut off (so scheme to query)
-        cleaned_url = url.split("#")[0]
         visited.add(cleaned_url)
-
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
             words = re.findall(r'\w+', soup.get_text(separator=' ').lower())
 
-            # if (len(words) / max(len(resp.raw_response.content), 1)) < 0.15:
-            #     blacklist.add(url)
-            #     return []
             if len(words) < 20:  # If there are very few words, it's likely a dead page
                 blacklist.add(url)
                 return []
 
-            filtered_words = [w for w in words if w not in stop_words]
+            filtered_words = [word for word in words if word not in stop_words]
 
             word_counter.update(filtered_words)
             word_count = len(words)
@@ -90,7 +85,7 @@ def extract_next_links(url, resp):
 
 
 def is_valid(url):
-    global blacklist, visited, last_access, trap_check
+    global blacklist, visited, trap_check
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
 
@@ -126,25 +121,23 @@ def is_valid(url):
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
 
-        if re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
-            return False
-        if re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url):
+        if re.search(r'\b\d{4}[-/]\d{2}([-/]\d{2})?\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
             return False
         if re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE):
             return False
         if re.search(r'gitlab\.ics\.uci\.edu.*(/-/|/users/|/blob/|/commits/|/tree/|/compare|/explore/|\.git$|/[^/]+/[^/]+)', url):
             return False
-        if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url):
-            return False
-        if re.search(r'wp-login\.php\?redirect_to=[^&]+', url):
-            return False
         if re.search(r'/page/\d+', url):
             return False
-        if re.search(r'[\?&]version=\d+', url) or re.search(r'[\?&]action=diff&version=\d+', url) or re.search(r'[\?&]format=txt', url):
+        if re.search(r'[?&]action=download&upname=[^&]*', url, re.IGNORECASE):
+            return False
+        if re.search(r'[?&]redirect_to=[^&]+', url, re.IGNORECASE):
             return False
         if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE):
             return False
 
+
+        # unwanted file extensions
         pattern = (
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             r"|png|tiff?|mid|mp2|mp3|mp4"
@@ -153,8 +146,8 @@ def is_valid(url):
             r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             r"|epub|dll|cnf|tgz|sha1"
             r"|thmx|mso|arff|rtf|jar|csv"
-            r"|rm|smil|wmv|swf|wma|zip|rar|gz|bam)$"
-        )
+            r"|rm|smil|wmv|swf|wma|zip|rar|gz|bam)$")
+        
         # check that queries do not have unwanted file extensions
         queries = parse_qs(parsed.query)
         for values in queries.values():
