@@ -29,11 +29,7 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
-<<<<<<< HEAD
     global blacklist, visited, last_access, trap_check
-=======
-    global blacklist, visited
->>>>>>> ff84615f11d981212f9a05fe26e1db78bf4fce71
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     
     links = []
@@ -89,7 +85,6 @@ def extract_next_links(url, resp):
 
 
 def is_valid(url):
-<<<<<<< HEAD
     global blacklist, visited, last_access, trap_check
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
@@ -110,12 +105,6 @@ def is_valid(url):
         if trap_check[base_url] > 175:
             return False
 
-=======
-    global blacklist, visited, trap_check
-    global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
-
-    try:
->>>>>>> ff84615f11d981212f9a05fe26e1db78bf4fce71
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
@@ -134,7 +123,6 @@ def is_valid(url):
         if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
 
-<<<<<<< HEAD
         if re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
             return False
         if re.search(r'[?&](date|year|month|day|view|do|tab_files)=[^&]*', url, re.IGNORECASE):
@@ -142,16 +130,6 @@ def is_valid(url):
         if re.search(r'gitlab\.ics\.uci\.edu.*(/-/|/users/|/blob/|/commits/|/tree/|/compare|/explore/|\.git$|/[^/]+/[^/]+)', url):
             return False
         if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url):
-=======
-        base_url = url.split("?")[0]  # without query or fragment
-        trap_check[base_url] = trap_check.get(base_url, 0) + 1
-        if trap_check[base_url] > 175:
-            return False
-        
-        subdomain = parsed.netloc
-        trap_check[subdomain] = trap_check.get(subdomain, 0) + 1
-        if trap_check[subdomain] > 500:
->>>>>>> ff84615f11d981212f9a05fe26e1db78bf4fce71
             return False
 
         if (re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url) or 
