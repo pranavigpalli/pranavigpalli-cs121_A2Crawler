@@ -1,61 +1,87 @@
+# re is for the regex filteration
+# lxml is for the BeautifulSoup
+# urlib was used for parsing the url
+# BeautifulSoup is used for retrieving all page content
+# Counter is used for generating the report, specifically for counting the amt of words on a page. 
 import re
 import lxml
 from urllib.parse import urlparse, urljoin, parse_qs
 from bs4 import BeautifulSoup
 from collections import Counter
 
+# These are data structures that store URLs. 
 blacklist = set()
+# blacklist stores URLs that don’t have the response code of 200, contain too much or too little content, and aren’t text or html files.
 visited = set()
+# Visited stores all valid URLs that were scraped. These are sets since they cannot contain duplicate objects
 trap_check = {}
+# Trap_check keeps track of all URLs’ subdomain and their frequency. Every subdomain has a maximum amount, and if exceeded, are then ignored
 
 longest_page_url = None
+# longest_page_url is the longest url page found yet
 longest_page_word_count = 0
+# longest_page_word_count is the length of the longest url page
 subdomains = {}
+# subdomains is a dictionary that stores all subdomains & links them to a set that contains all specific subdomain URLs within it
 word_counter = Counter()
+# word_counter is a Counter() object that stores all words found from scraping pages
 
+# These hard-coded variables are set limits we have for when we crawl.
+# The file size MUST be between 100 bytes and 5 MB, and the URL cannot be too long.  
 MIN_FILE_SIZE = 100              # 100 bytes (approx. 20 words)
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 URL_MAXLEN = 225
 SEGMENTS_MAXLEN = 10
 QUERY_PARAMS_MAXLEN = 5
 
+# This is meant to create our stop words list.
+# We use a file we created prior to running the crawler and create a set containing all the stop words
 with open("stop_words.txt") as f:
     stop_words = set(f.read().split())
 
+# scraper() takes in both a URL and its response, and determines if the URL’s response code is valid for it to be crawled.
+# If so, then the URL and its response are sent to extract_next_links().
+# This gives a list of valid links scraped from the page. Returns a list of links from that link list that are valid. 
+# Time complexity: 
 def scraper(url, resp):
     links = []
     if resp.status == 200:
         links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
 
+# extract_next_links() takes in a URL and its response code, and scrapes the webpage for its content and other URLs within itself. 
+# Time complexity: 
 def extract_next_links(url, resp):
     global blacklist, visited
     global longest_page_url, longest_page_word_count, subdomains, word_counter
     
-    links = []
+    links = [] # list for all links found on webpage
     cleaned_url = url.split("#")[0]  # the url without the fragment (i.e. scheme to query)
     
-    if resp.status != 200:
+    # if any of the following are true, the URL is added to the blacklist and is not scrapped. Otherwise, URL is added to visited
+    if resp.status != 200: # if the response status is valid
         blacklist.add(cleaned_url)
-    elif resp.raw_response and ("text/html" not in resp.raw_response.headers.get("Content-Type", "")):
+    elif resp.raw_response and ("text/html" not in resp.raw_response.headers.get("Content-Type", "")): # if the URL isn’t a text or html file
         blacklist.add(cleaned_url)
-    elif len(resp.raw_response.content) < MIN_FILE_SIZE:
+    elif len(resp.raw_response.content) < MIN_FILE_SIZE: # if the webpage is bigger than 100 bytes
         blacklist.add(cleaned_url)
-    elif len(resp.raw_response.content) > MAX_FILE_SIZE:
+    elif len(resp.raw_response.content) > MAX_FILE_SIZE: # if the webpage is smaller than 5 MB
         blacklist.add(cleaned_url)
     else:
         visited.add(cleaned_url)
 
         try:
-            soup = BeautifulSoup(resp.raw_response.content, "lxml")
-            words = re.findall(r'\w+', soup.get_text(separator=' ').lower())
+            soup = BeautifulSoup(resp.raw_response.content, "lxml") # Turning URL contents into a soup object
+            words = re.findall(r'\w+', soup.get_text(separator=' ').lower()) # Retrieving text content from webpage
 
-            if len(words) < 20:
+            if len(words) < 20: # If the webpage is too small, add it to the blacklist and return an empty list
                 blacklist.add(cleaned_url)
                 return []
 
-            filtered_words = [word for word in words if word not in stop_words]
+            filtered_words = [word for word in words if word not in stop_words] # List of all of the words from the webpage that ARE NOT stop words
 
+            # Adds words to the word counter object, and finds the length of all valid words on the webpage.
+            # If the current longest page is longer than the previous longest page, it is reassigned as that
             word_counter.update(filtered_words)
             word_count = len(words)
             if word_count > longest_page_word_count:
@@ -66,6 +92,9 @@ def extract_next_links(url, resp):
             parsed_cleaned = urlparse(cleaned_url)
             hostname = parsed_cleaned.netloc.lower()
 
+            # If the URL is under the domains of “ics.uci.edu”, “cs.uci.edu”, “informatics.uci.edu”, or “stat.uci.edu”,
+            # it is added as a key within subdomains, with its ‘cleaned’ URL part of its set.
+            # If the hostname is not already in subdomains, it is added first. 
             if hostname.endswith("ics.uci.edu") or hostname.endswith("cs.uci.edu") or hostname.endswith("informatics.uci.edu") or hostname.endswith("stat.uci.edu"):
                 if hostname not in subdomains:
                     subdomains[hostname] = set()
@@ -87,6 +116,9 @@ def extract_next_links(url, resp):
 def is_valid(url):
     global blacklist, visited, trap_check
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
+    # We are changing the global variables within this function, so we must
+    # declare them here to make sure that we change the globals rather than creating
+    # new local variables.
 
     try:
         parsed = urlparse(url)
