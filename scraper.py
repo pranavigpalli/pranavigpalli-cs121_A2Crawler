@@ -13,8 +13,8 @@ longest_page_word_count = 0
 subdomains = {}
 word_counter = Counter()
 
-MIN_FILE_SIZE = 100              # 100 bytes (approx. 20 words)
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+MIN_FILE_SIZE = 100
+MAX_FILE_SIZE = 5 * 1024 * 1024 
 URL_MAXLEN = 225
 SEGMENTS_MAXLEN = 10
 QUERY_PARAMS_MAXLEN = 5
@@ -45,13 +45,12 @@ def extract_next_links(url, resp):
         blacklist.add(cleaned_url)
     else:
         visited.add(cleaned_url)
-
         try:
             soup = BeautifulSoup(resp.raw_response.content, "lxml")
             words = re.findall(r'\w+', soup.get_text(separator=' ').lower())
 
-            if len(words) < 20:
-                blacklist.add(cleaned_url)
+            if len(words) < 20:  # If there are very few words, it's likely a dead page
+                blacklist.add(url)
                 return []
 
             filtered_words = [word for word in words if word not in stop_words]
@@ -62,7 +61,7 @@ def extract_next_links(url, resp):
                 longest_page_word_count = word_count
                 longest_page_url = cleaned_url
 
-            # parsed_cleaned is a ParseResult object from scheme to query
+            # parsed_cleaned is a Parse Object from scheme to query
             parsed_cleaned = urlparse(cleaned_url)
             hostname = parsed_cleaned.netloc.lower()
 
@@ -72,6 +71,7 @@ def extract_next_links(url, resp):
                 subdomains[hostname].add(cleaned_url)
 
             base_url = f"{parsed_cleaned.scheme}://{parsed_cleaned.netloc}"
+
             for anchor in soup.find_all("a", href=True):
                 absolute_url = urljoin(base_url, anchor["href"])
                 link = absolute_url.split("#")[0]
@@ -108,19 +108,9 @@ def is_valid(url):
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
-        
-        if (url in visited) or (url in blacklist):
+        if url in blacklist:
             return False
-        
         if len(url) > URL_MAXLEN:
-            return False
-        
-        path_segments = parsed.path.split('/')
-        if len(path_segments) > SEGMENTS_MAXLEN:
-            return False
-        
-        query_params = parsed.query.split('&')
-        if len(query_params) > QUERY_PARAMS_MAXLEN:
             return False
 
         if re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
@@ -132,22 +122,30 @@ def is_valid(url):
         if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url):
             return False
 
-        if (re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url) or 
-            re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url) or 
-            re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE)):
+        path_segments = parsed.path.split('/')
+        if len(path_segments) > SEGMENTS_MAXLEN:
+            return False
+
+        query_params = parsed.query.split('&') if parsed.query else []
+
+        if len(query_params) > QUERY_PARAMS_MAXLEN:
+            return False
+
+        if re.search(r'\b\d{4}[-/]\d{2}([-/]\d{2})?\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url):
+            return False
+        if re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE):
             return False
         if re.search(r'gitlab\.ics\.uci\.edu.*(/-/|/users/|/blob/|/commits/|/tree/|/compare|/explore/|\.git$|/[^/]+/[^/]+)', url):
             return False
-        if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url):
-            return False
-        if re.search(r'wp-login\.php\?redirect_to=[^&]+', url):
-            return False
         if re.search(r'/page/\d+', url):
             return False
-        if re.search(r'[\?&]version=\d+', url) or re.search(r'[\?&]action=diff&version=\d+', url) or re.search(r'[\?&]format=txt', url):
+        if re.search(r'[?&]action=download&upname=[^&]*', url, re.IGNORECASE):
+            return False
+        if re.search(r'[?&]redirect_to=[^&]+', url, re.IGNORECASE):
             return False
         if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE):
             return False
+
 
         # unwanted file extensions
         pattern = r".*\.(css|js|bmp|gif|jpe?g|ico"
@@ -170,7 +168,6 @@ def is_valid(url):
 
     except TypeError:
         print ("TypeError for ", parsed)
-        raise
 
 def output_report():
     with open("report.txt", "w", encoding="utf-8") as file:
