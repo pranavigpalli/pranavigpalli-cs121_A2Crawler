@@ -100,19 +100,27 @@ def extract_next_links(url, resp):
                     subdomains[hostname] = set()
                 subdomains[hostname].add(cleaned_url)
 
+            # making the base URL from the ‘cleaned’ URL (scheme and netloc), going through all links within the URL and adding href to the link.
+            # adding the link to the link list. 
             base_url = f"{parsed_cleaned.scheme}://{parsed_cleaned.netloc}"
             for anchor in soup.find_all("a", href=True):
                 absolute_url = urljoin(base_url, anchor["href"])
                 link = absolute_url.split("#")[0]
                 if link not in links:
                     links.append(link)
-        
+
+        # If an exception or error occurs, print error
         except Exception as e:
             print(f"ERROR ON {url}: {e}")
         
-    return links
+    return links # Returning all links found on current URL
 
-
+# is_valid() takes in a URL string and verifies whether it is a valid URL to scrape or not, depending on specific criteria. Returns True if the URL is verified, False otherwise
+# Time complexity: O(L + k + m)
+# Where:
+# L is the length of the URL,
+# k is the number of path segments,
+# m is the number of query parameters.
 def is_valid(url):
     global blacklist, visited, last_access, trap_check
     global longest_page_url, longest_page_word_count, subdomains, word_counter
