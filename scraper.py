@@ -42,7 +42,12 @@ with open("stop_words.txt") as f:
 # scraper() takes in both a URL and its response, and determines if the URL’s response code is valid for it to be crawled.
 # If so, then the URL and its response are sent to extract_next_links().
 # This gives a list of valid links scraped from the page. Returns a list of links from that link list that are valid. 
-# Time complexity: 
+# Time complexity: O(N + A + W + L^2)
+# Where:
+# N is the size of the raw response content,
+# A is the number of anchor tags,
+# W is the number of words,
+# L is the number of links extracted.
 def scraper(url, resp):
     links = []
     if resp.status == 200:
@@ -50,7 +55,11 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 # extract_next_links() takes in a URL and its response code, and scrapes the webpage for its content and other URLs within itself. 
-# Time complexity: 
+# Time complexity: O(N + A + W)
+# Where:
+# N is the size of the raw response content,
+# A is the number of anchor tags found,
+# W is the number of words extracted.
 def extract_next_links(url, resp):
     global blacklist, visited
     global longest_page_url, longest_page_word_count, subdomains, word_counter
@@ -100,19 +109,28 @@ def extract_next_links(url, resp):
                     subdomains[hostname] = set()
                 subdomains[hostname].add(cleaned_url)
 
+            # making the base URL from the ‘cleaned’ URL, and adding href to all links found on page
+            # adding all the links found into link list
             base_url = f"{parsed_cleaned.scheme}://{parsed_cleaned.netloc}"
             for anchor in soup.find_all("a", href=True):
                 absolute_url = urljoin(base_url, anchor["href"])
                 link = absolute_url.split("#")[0]
                 if link not in links:
                     links.append(link)
-        
+
+        # If an exception or error occurs, print error
         except Exception as e:
             print(f"ERROR ON {url}: {e}")
         
-    return links
+    return links # Returning all links found on current URL
 
 
+# is_valid() takes in a URL string and verifies whether it is a valid URL to scrape or not, depending on specific criteria. Returns True if the URL is verified, False otherwise
+# Time complexity: O(L + k + m)
+# Where:
+# L is the length of the URL,
+# k is the number of path segments,
+# m is the number of query parameters.
 def is_valid(url):
     global blacklist, visited, trap_check
     global URL_MAXLEN, SEGMENTS_MAXLEN, QUERY_PARAMS_MAXLEN
@@ -122,48 +140,53 @@ def is_valid(url):
 
     try:
         parsed = urlparse(url)
-        if parsed.scheme not in set(["http", "https"]):
+        if parsed.scheme not in set(["http", "https"]): # if the parsed URL’s scheme ISN’T http or https
             return False
         
         if (url in visited) or (url in blacklist):
             return False
         
-        if len(url) > URL_MAXLEN:
+        if len(url) > URL_MAXLEN: # if the url length is too long
             return False
         
-        path_segments = parsed.path.split('/')
-        if len(path_segments) > SEGMENTS_MAXLEN:
+        path_segments = parsed.path.split('/') # List of URL path segments, split by ‘/’
+        if len(path_segments) > SEGMENTS_MAXLEN:  # if too many segments
             return False
         
-        query_params = parsed.query.split('&')
-        if len(query_params) > QUERY_PARAMS_MAXLEN:
+        query_params = parsed.query.split('&') # List of URL query segments, split by '/'
+        if len(query_params) > QUERY_PARAMS_MAXLEN: # if too many segments
             return False
 
+        # adding to the trap_check dictionary the base URL and a counter for it, 
+        # which increases with each url that is added to it. 
         base_url = url.split("?")[0]  # without query or fragment
         trap_check[base_url] = trap_check.get(base_url, 0) + 1
-        if trap_check[base_url] > 175:
+        if trap_check[base_url] > 175: # If the counter exceeds 175
             return False
         
-        subdomain = parsed.netloc
-        trap_check[subdomain] = trap_check.get(subdomain, 0) + 1
-        if trap_check[subdomain] > 500:
+        subdomain = parsed.netloc # the hostname
+        trap_check[subdomain] = trap_check.get(subdomain, 0) + 1 # adds to the hostname in the trap check
+        if trap_check[subdomain] > 500: # if the hostname has been present more than 500 times
             return False
 
+        # checking for calendar traps based on URL patterns
         if (re.search(r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b', url) or 
             re.search(r'\b\d{4}[-/]\d{2}(-\d{2})?\b', url) or 
             re.search(r'[?&](date|year|month|day|view|do|tab_files|ical)=[^&]*', url, re.IGNORECASE)):
             return False
+
+         # for filtering out specific types of pages
         if re.search(r'gitlab\.ics\.uci\.edu.*(/-/|/users/|/blob/|/commits/|/tree/|/compare|/explore/|\.git$|/[^/]+/[^/]+)', url):
             return False
-        if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url):
+        if re.search(r'sli\.ics\.uci\.edu.*\?action=download&upname=', url): # if the domain name is sli.ics.uci.edu and has "?action=download&upname="
             return False
-        if re.search(r'wp-login\.php\?redirect_to=[^&]+', url):
+        if re.search(r'wp-login\.php\?redirect_to=[^&]+', url): # if the URL contains “wp-login\.php\?redirect_to=”
             return False
-        if re.search(r'/page/\d+', url):
+        if re.search(r'/page/\d+', url): # if the URL is a part of multiple pages
             return False
-        if re.search(r'[\?&]version=\d+', url) or re.search(r'[\?&]action=diff&version=\d+', url) or re.search(r'[\?&]format=txt', url):
+        if re.search(r'[\?&]version=\d+', url) or re.search(r'[\?&]action=diff&version=\d+', url) or re.search(r'[\?&]format=txt', url): # if the URL is just a different version of another
             return False
-        if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE):
+        if re.search(r'\b\d{4}-(spring|summer|fall|winter)\b', parsed.path, re.IGNORECASE): # if the URL has a year followed by a season with a hyphen
             return False
 
         # unwanted file extensions
@@ -184,6 +207,7 @@ def is_valid(url):
                 if re.match(pattern, value.lower()):
                     return False
 
+        # returns the valid URL 
         return re.match(r'^(.+\.)?(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$', parsed.netloc) and \
             not re.match(pattern, parsed.path.lower())
 
@@ -191,20 +215,22 @@ def is_valid(url):
         print ("TypeError for ", parsed)
         raise
 
+# output_report() writes to a file the final report, including the total amount of unique pages, the longest page and its length, the top 50 words, and all subdomains found
+# Time complexity: O(n + m log m) where n is the number of unique words and m is the number of subdomains.
 def output_report():
     with open("report.txt", "w", encoding="utf-8") as file:
         unique_count = len(visited)
-        file.write(f"Total unique pages: {unique_count}\n\n")
+        file.write(f"Total unique pages: {unique_count}\n\n") # unique pages
 
-        file.write(f"Longest page: {longest_page_url} with {longest_page_word_count} words\n\n")
+        file.write(f"Longest page: {longest_page_url} with {longest_page_word_count} words\n\n") # longest page
 
         common_words = word_counter.most_common(50)
         file.write("50 Most common words (word, frequency):\n")
-        for word, freq in common_words:
+        for word, freq in common_words: # most common words
             file.write(f"{word}, {freq}\n")
         file.write("\n")
 
         file.write("Subdomains in ics.uci.edu:\n")
         for subdomain in sorted(subdomains.keys()):
             count = len(subdomains[subdomain])
-            file.write(f"{subdomain}, {count}\n")
+            file.write(f"{subdomain}, {count}\n") # subdomains
